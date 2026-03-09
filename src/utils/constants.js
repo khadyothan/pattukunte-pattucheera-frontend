@@ -322,5 +322,13 @@ export const missingMovies = [
   "35 Chinna Katha Kaadu",
   "Maharaja",
   "Chakkiligintha",
-  "Mazaka"
+  "Mazaka",
+  "The Great Pre-Wedding Show",
+  "Little Hearts",
+  "Jigris",
+  "Gopi Galla Goa Trip",
+  "Patang",
+  "Santhana Prapthirasthu",
+  "Eesha",
+  "K-Ramp"
 ];
