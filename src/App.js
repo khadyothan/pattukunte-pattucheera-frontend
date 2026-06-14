@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import TimeTravel from "./pages/TimeTravel";
 import Banner from "./components/banner";
 import { missingMovies } from "./utils/constants";
+import { useAuth } from "./hooks/useAuth";
 
 const fabBtn = {
   // border-radius: 50%;
@@ -26,6 +27,8 @@ const App = () => {
     localStorage.getItem("theme") ? localStorage.getItem("theme") : "dark"
   );
   const [showUploadIcon, setShowUploadIcon] = React.useState(false);
+  const [showProfileMenu, setShowProfileMenu] = React.useState(false);
+  const { user, signOut } = useAuth();
   React.useEffect(() => {
     if (!localStorage.getItem("theme")) {
       localStorage.setItem("theme", "dark");
@@ -106,6 +109,40 @@ const App = () => {
             className="bg-transparent material-symbols-outlined absolute text-gray-500 z-1 top-[2.5%] right-[2%]">
             dark_mode
           </button>
+        )}
+        {user && (
+          <>
+            {showProfileMenu && (
+              <div className="fixed inset-0 z-10" onClick={() => setShowProfileMenu(false)} />
+            )}
+            <div className="absolute top-[2%] right-[8%] z-20">
+              <button onClick={() => setShowProfileMenu((prev) => !prev)}>
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName}
+                  className="w-9 h-9 rounded-full border-2 border-gray-400"
+                />
+              </button>
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-44 rounded border border-gray-300 dark:border-gray-600 bg-slate-200 dark:bg-primary shadow-lg">
+                  <div className="px-4 py-3 border-b border-gray-300 dark:border-gray-600">
+                    <p className="text-sm font-medium text-primary dark:text-secondary truncate">
+                      {user.displayName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      signOut();
+                      setShowProfileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <span className="material-symbols-outlined text-base">logout</span>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
         {process.env.REACT_APP_BANNER && <Banner />}
         <BrowserRouter>

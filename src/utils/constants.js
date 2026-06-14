@@ -8,6 +8,9 @@ export const blueSquare = "🟦";
 
 export const MAX_ATTEMPTS = 5;
 
+// Fibonacci points: 1st guess = 8, 2nd = 5, 3rd = 3, 4th = 2, 5th = 1, lost = 0
+export const GUESS_POINTS = { 1: 8, 2: 5, 3: 3, 4: 2, 5: 1 };
+
 export const getShareText = (attempts, gameStatus, isTimeTravelled = false) => {
   let shareText = "";
   if (gameStatus === GAME_STATUS.FAILED) {

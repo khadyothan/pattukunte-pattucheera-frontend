@@ -1,11 +1,15 @@
 import AsyncSelect from "react-select/async";
 import React, { useMemo } from "react";
-import { GAME_STATUS, MAX_ATTEMPTS, isGameDone } from "../utils/constants";
+import { GAME_STATUS, MAX_ATTEMPTS, GUESS_POINTS, isGameDone } from "../utils/constants";
 import PropTypes from "prop-types";
 import ShareResults from "./ShareResults";
 import Results from "./Results";
 import Fuse from "fuse.js";
 import Confetti from "react-dom-confetti";
+import SignInModal from "./SignInModal";
+import { useAuth } from "../hooks/useAuth";
+import { db } from "../firebase";
+import { doc, setDoc, updateDoc, increment, Timestamp } from "firebase/firestore";
 
 const config = {
   angle: "180",
@@ -48,8 +52,12 @@ const Game = ({
   const [inputValue, setValue] = React.useState("");
   const [selectedValue, setSelectedValue] = React.useState(null);
   const [isShowConfetti, setIsShowConfetti] = React.useState(null);
+  const [showSignInModal, setShowSignInModal] = React.useState(false);
+  const [pendingGuess, setPendingGuess] = React.useState(null);
   const gameFinished = useMemo(() => isGameDone(gameStatus), [gameStatus]);
+  const { user, signIn } = useAuth();
   const statsModalTimeOut = 2000;
+
   const handleInputChange = (value) => {
     setValue(value);
   };
@@ -78,34 +86,60 @@ const Game = ({
   };
 
   const submit = (value) => {
-    if (
-      (selectedValue?.title && !value ? selectedValue.title : value.title).trim().toLowerCase() ===
-      movie.trim().toLowerCase()
-    ) {
+    if (!user) {
+      setPendingGuess(value || selectedValue);
+      setShowSignInModal(true);
+      return;
+    }
+
+    const guessTitle = selectedValue?.title && !value ? selectedValue.title : value.title;
+    const allGuesses = currentGuesses ? [...currentGuesses.split(","), guessTitle] : [guessTitle];
+    const playRef = doc(db, "users", user.uid, "plays", String(day));
+    const userRef = doc(db, "users", user.uid);
+
+    if (guessTitle.trim().toLowerCase() === movie.trim().toLowerCase()) {
       setIsShowConfetti(true);
       window.gtag("event", "GameWon", { event_category: "game-stats" });
       setTimeout(() => setOpenStatsModal(true), statsModalTimeOut);
       setGameStatus(GAME_STATUS.COMPLETED);
       setAttemptsInLocalStorage(currentIndex);
+      const newStreak = lastPlayedGame === day - 1 ? gameStats.currentStreak + 1 : 1;
       setStats(
         JSON.stringify({
           gamesPlayed: gameStats.gamesPlayed + 1,
           gamesWon: gameStats.gamesWon + 1,
-          currentStreak: lastPlayedGame === day - 1 ? gameStats.currentStreak + 1 : 1,
-          maxStreak: Math.max(gameStats.maxStreak, gameStats.currentStreak + 1)
+          currentStreak: newStreak,
+          maxStreak: Math.max(gameStats.maxStreak, newStreak)
         })
       );
       setLastPlayedGame(day);
+
+      const wonPoints = GUESS_POINTS[currentIndex] ?? 0;
+      setDoc(playRef, {
+        attempts: currentIndex,
+        guesses: allGuesses,
+        result: "won",
+        solvedAt: currentIndex,
+        points: wonPoints,
+        playedAt: Timestamp.now()
+      }).catch(console.error);
+      updateDoc(userRef, {
+        "stats.gamesPlayed": increment(1),
+        "stats.gamesWon": increment(1),
+        "stats.currentStreak": newStreak,
+        "stats.maxStreak": Math.max(gameStats.maxStreak, newStreak),
+        "stats.lastPlayedDay": day,
+        [`stats.guessDistribution.${currentIndex}`]: increment(1),
+        totalPoints: increment(wonPoints)
+      }).catch(console.error);
     } else if (currentIndex === MAX_ATTEMPTS) {
       window.gtag("event", "GameFailed", { event_category: "game-stats" });
       setGameStatus(GAME_STATUS.FAILED);
       setTimeout(() => setOpenStatsModal(true), statsModalTimeOut);
       if (currentGuesses !== "") {
-        setCurrentGuesses(
-          currentGuesses + "," + (value?.title ? value?.title : selectedValue.title)
-        );
+        setCurrentGuesses(currentGuesses + "," + guessTitle);
       } else {
-        setCurrentGuesses(value?.title ? value?.title : selectedValue.title);
+        setCurrentGuesses(guessTitle);
       }
       setStats(
         JSON.stringify({
@@ -117,18 +151,46 @@ const Game = ({
       );
       setLastPlayedGame(day);
       setSelectedValue(null);
+
+      setDoc(playRef, {
+        attempts: MAX_ATTEMPTS,
+        guesses: allGuesses,
+        result: "lost",
+        solvedAt: null,
+        points: 0,
+        playedAt: Timestamp.now()
+      }).catch(console.error);
+      updateDoc(userRef, {
+        "stats.gamesPlayed": increment(1),
+        "stats.currentStreak": 0,
+        "stats.lastPlayedDay": day
+      }).catch(console.error);
     } else {
       setCurrentIndex(currentIndex + 1);
       setCurrentIndexFromButton(currentIndex + 1);
       if (currentGuesses !== "") {
-        setCurrentGuesses(
-          currentGuesses + "," + (value?.title ? value?.title : selectedValue.title)
-        );
+        setCurrentGuesses(currentGuesses + "," + guessTitle);
       } else {
-        setCurrentGuesses(value?.title ? value?.title : selectedValue.title);
+        setCurrentGuesses(guessTitle);
       }
+
+      setDoc(playRef, {
+        attempts: currentIndex,
+        guesses: allGuesses,
+        result: "in_progress",
+        solvedAt: null,
+        playedAt: Timestamp.now()
+      }).catch(console.error);
     }
     setSelectedValue(null);
+  };
+
+  const handleSignIn = async () => {
+    await signIn();
+    if (pendingGuess) {
+      submit(pendingGuess);
+      setPendingGuess(null);
+    }
   };
 
   const fetchData = async (inputValue) => {
@@ -192,6 +254,14 @@ const Game = ({
   };
   return (
     <>
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => {
+          setShowSignInModal(false);
+          setPendingGuess(null);
+        }}
+        onSignIn={handleSignIn}
+      />
       {!gameFinished && (
         <div className="w-full">
           <div className="w-full flex justify-center mb-3">

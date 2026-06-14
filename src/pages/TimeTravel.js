@@ -9,6 +9,7 @@ import {
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import Game from "../components/Game";
 import ImagesContainer from "../components/ImagesContainer";
+import Leaderboard from "../components/Leaderboard";
 import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 
@@ -85,6 +86,7 @@ const TimeTravel = ({ moviesList }) => {
 
   return (
     <div className="bg-secondary dark:bg-primary min-h-screen h-auto text-primary dark:text-secondary overflow-scroll">
+      <Leaderboard />
       {/* <h1 className="text-center underline text-3xl py-3">Time Travel to past!</h1> */}
       {timeTravelDate >= 0 && (
         <>
